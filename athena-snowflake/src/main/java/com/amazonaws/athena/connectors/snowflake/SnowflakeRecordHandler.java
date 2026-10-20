@@ -248,6 +248,9 @@ public class SnowflakeRecordHandler extends JdbcRecordHandler
                 ConstraintEvaluator evaluator = new ConstraintEvaluator(allocator, derivedSchema, request.getConstraints());
                 S3BlockSpiller spiller = new S3BlockSpiller(s3Client, spillConfig, allocator, derivedSchema, evaluator, configOptions)) {
             VectorSchemaRoot root = reader.getVectorSchemaRoot();
+            // Write the schema sidecar BEFORE any record is written, so a reader can discover the schema
+            // as soon as the first data object appears (and even if the row-writing loop later fails).
+            writeSchemaSidecar(s3Client, spillLocation, split.getEncryptionKey(), derivedSchema, allocator);
             while (reader.loadNextBatch()) {
                 // Bulk columnar copy: append each Parquet vector into the spill block (types already match).
                 spiller.writeRows((Block block, int startRowNum) -> {
@@ -262,7 +265,6 @@ public class SnowflakeRecordHandler extends JdbcRecordHandler
             if (spiller.spilled()) {
                 spillLocations.addAll(spiller.getSpillLocations());
             }
-            writeSchemaSidecar(s3Client, spillLocation, split.getEncryptionKey(), derivedSchema, allocator);
         }
         return derivedSchema;
     }
