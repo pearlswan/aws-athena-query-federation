@@ -299,6 +299,10 @@ public abstract class JdbcRecordHandler
                 Schema derivedSchema = JdbcToArrowUtils.jdbcToArrowSchema(resultSet.getMetaData(),
                         Calendar.getInstance(TimeZone.getTimeZone("UTC")));
 
+                // Write the schema sidecar BEFORE any record is written, so a reader can discover the schema
+                // as soon as the first data object appears (and even if the row-writing loop later fails).
+                writeSchemaSidecar(s3Client, spillLocation, request.getSplit().getEncryptionKey(), derivedSchema, allocator);
+
                 try (ConstraintEvaluator evaluator = new ConstraintEvaluator(allocator, derivedSchema, request.getConstraints());
                         S3BlockSpiller spiller = new S3BlockSpiller(s3Client, spillConfig, allocator, derivedSchema, evaluator, configOptions)) {
                     // Populate the Arrow vectors directly with BlockUtils.setValue, which already handles the full
@@ -319,7 +323,6 @@ public abstract class JdbcRecordHandler
                     if (spiller.spilled()) {
                         spillLocations.addAll(spiller.getSpillLocations());
                     }
-                    writeSchemaSidecar(s3Client, spillLocation, request.getSplit().getEncryptionKey(), derivedSchema, allocator);
 
                     LOGGER.info("writePassThroughQueryUsingResultSchema: wrote {} row(s) across {} spill object(s) + 1 schema sidecar under s3://{}/{}",
                             rowsReturnedFromDatabase, spillLocations.size(), spillLocation.getBucket(), spillLocation.getKey());
