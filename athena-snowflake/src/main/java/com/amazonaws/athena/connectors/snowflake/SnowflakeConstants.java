@@ -103,6 +103,7 @@ public final class SnowflakeConstants
     public static final String USERNAME_UPPERCASE = "USERNAME";
     public static final String PASSWORD_UPPERCASE = "PASSWORD";
     public static final String USER = "user";
+    public static final String ACCESS_TOKEN_UPPERCASE = "ACCESS_TOKEN";
 
     /**
      * S3 export related constant.

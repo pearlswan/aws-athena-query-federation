@@ -138,6 +138,80 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <filters>
+                                <!-- Apache Arrow - Keep only essential classes for Linux ARM64 -->
+                                <filter>
+                                    <artifact>org.apache.arrow:*</artifact>
+                                    <excludes>
+                                        <exclude>**/arrow_dataset_jni/**</exclude>
+                                    </excludes>
+                                </filter>
+                                <!-- Snowflake JDBC - Keep only essential classes for Linux ARM64 -->
+                                <filter>
+                                    <artifact>net.snowflake:snowflake-jdbc</artifact>
+                                    <excludes>
+                                        <exclude>**/META-INF/native/libnet_snowflake_client_jdbc_internal_conscrypt_openjdk_jni-osx-x86_64.dylib</exclude>
+                                        <exclude>**/META-INF/native/libnet_snowflake_client_jdbc_internal_conscrypt_openjdk_jni-linux-x86_64.so</exclude>
+
+                                        <exclude>**/META-INF/native/libnet_snowflake_client_jdbc_internal_grpc_netty_shaded_netty_tcnative_osx_x86_64.jnilib</exclude>
+                                        <exclude>**/META-INF/native/libnet_snowflake_client_jdbc_internal_grpc_netty_shaded_netty_tcnative_linux_x86_64.so</exclude>
+                                        <exclude>**/META-INF/native/libnet_snowflake_client_jdbc_internal_grpc_netty_shaded_netty_tcnative_osx_aarch_64.jnilib</exclude>
+
+                                        <exclude>**/META-INF/native/net_snowflake_client_jdbc_internal_grpc_netty_shaded_netty_tcnative_windows_x86_64.dll</exclude>
+                                        <exclude>**/META-INF/native/net_snowflake_client_jdbc_internal_conscrypt_openjdk_jni-windows-x86_64.dll</exclude>
+                                        <exclude>**/META-INF/native/net_snowflake_client_jdbc_internal_conscrypt_openjdk_jni-windows-x86.dll</exclude>
+
+                                        <!-- GCS/Azure external-stage (PUT/GET) support - this connector's SnowflakeMetadataHandler
+                                            validates storage integrations as S3-only, so these branches of
+                                            StorageClientFactory are never reachable. Keep google/{common,protobuf,gson,
+                                            flatbuffers,auto,re2j,type,logging,errorprone,j2objc} - those back Arrow/guava
+                                            usage elsewhere in the driver and are not part of this exclusion. -->
+                                        <exclude>**/net/snowflake/client/jdbc/internal/grpc/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/storage/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/cloud/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/monitoring/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/rpc/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/longrunning/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/apps/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/shopping/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/geo/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/iam/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/auth/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/google/api/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/azure/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/reactor/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/opencensus/**</exclude>
+                                        <exclude>**/net/snowflake/client/jdbc/internal/opentelemetry/**</exclude>
+                                        <exclude>**/META-INF/native/libnet_snowflake_client_jdbc_internal_grpc_netty_shaded_netty_tcnative_linux_aarch_64.so</exclude>
+                                        <exclude>**/META-INF/native/libnet_snowflake_client_jdbc_internal_grpc_netty_shaded_netty_transport_native_epoll_aarch_64.so</exclude>
+                                        <exclude>**/META-INF/native/libnet_snowflake_client_jdbc_internal_grpc_netty_shaded_netty_transport_native_epoll_x86_64.so</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <!-- Standard security exclusions for signed JARs -->
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
     <repositories>
