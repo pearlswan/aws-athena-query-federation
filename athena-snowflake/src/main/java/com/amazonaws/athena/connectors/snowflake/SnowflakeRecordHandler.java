@@ -59,7 +59,6 @@ import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.TimeStampMilliTZVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
-import org.apache.arrow.vector.types.DateUnit;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -376,20 +375,14 @@ public class SnowflakeRecordHandler extends JdbcRecordHandler
     }
 
     /**
-     * Adjusts the default JDBC-to-Arrow export schema for Snowflake so the exported data is portable to plain Arrow
-     * readers (and consistent with the S3-export path):
-     * <ul>
-     *   <li><b>Precision:</b> scale-0 {@code NUMBER(p,0)} columns report a JDBC type of {@code BIGINT}/{@code INTEGER}/...,
-     *       so the default mapping yields an Arrow integer vector that cannot carry the precision {@code p}. We re-map
-     *       those to {@code Decimal(p, 0)} so the exported schema (and sidecar) keeps the source precision.</li>
-     *   <li><b>Timestamps:</b> timestamp-with-timezone columns map to an Arrow {@code TIMESTAMPMILLITZ} vector, which
-     *       {@code BlockUtils} writes using Presto/Athena timezone <em>packing</em> ({@code millis &lt;&lt; 12 | tzKey}).
-     *       A plain Arrow reader cannot decode that. We re-map timestamps to {@code Date(MILLISECOND)} so the value is
-     *       written as plain epoch millis (no packing), matching how Athena treats TSWithTZ as DateMilli(UTC).</li>
-     * </ul>
+     * Preserves the declared precision of integer-like Snowflake {@code NUMBER(p,0)} columns on the JDBC export
+     * path. Snowflake reports a scale-0 {@code NUMBER} with JDBC type {@code BIGINT}/{@code INTEGER}/..., so the
+     * default mapping yields an Arrow integer vector that cannot carry the precision {@code p}. We re-map those
+     * columns to {@code Decimal(p, 0)} so the exported schema (and sidecar) keeps the source precision.
      *
-     * <p>Columns the driver already maps to a decimal (scale &gt; 0) are left untouched, and integer precisions
-     * outside the Arrow 128-bit decimal range (1..38) fall back to the default integer mapping.
+     * <p>Columns the driver already maps to a decimal (scale &gt; 0) are left untouched, and precisions outside the
+     * Arrow 128-bit decimal range (1..38) fall back to the default integer mapping. Timestamp types are left as-is
+     * ({@code timestamp[ms, tz=UTC]}); they are written unpacked via {@link #exportPacksTimezone()}.
      */
     @Override
     protected Schema deriveExportSchema(ResultSet resultSet) throws SQLException
@@ -415,15 +408,6 @@ public class SnowflakeRecordHandler extends JdbcRecordHandler
                 }
                 LOGGER.debug("deriveExportSchema: column {} precision {} outside Arrow decimal range; keeping {}",
                         baseField.getName(), precision, baseField.getType());
-            }
-
-            if (baseField.getType() instanceof ArrowType.Timestamp) {
-                // Write plain epoch millis (DATEMILLI branch of BlockUtils uses Date#getTime) instead of the
-                // Presto/Athena timezone-packed TIMESTAMPMILLITZ encoding, so plain Arrow readers can decode it.
-                ArrowType.Date dateMilli = new ArrowType.Date(DateUnit.MILLISECOND);
-                fields.add(new Field(baseField.getName(),
-                        new FieldType(baseField.isNullable(), dateMilli, null), baseField.getChildren()));
-                continue;
             }
             fields.add(baseField);
         }

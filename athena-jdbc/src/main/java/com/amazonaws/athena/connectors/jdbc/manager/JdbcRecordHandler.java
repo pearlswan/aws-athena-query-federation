@@ -24,6 +24,7 @@ import com.amazonaws.athena.connector.lambda.data.Block;
 import com.amazonaws.athena.connector.lambda.data.BlockAllocator;
 import com.amazonaws.athena.connector.lambda.data.BlockSpiller;
 import com.amazonaws.athena.connector.lambda.data.BlockUtils;
+import com.amazonaws.athena.connector.lambda.data.DateTimeFormatterUtil;
 import com.amazonaws.athena.connector.lambda.data.FieldResolver;
 import com.amazonaws.athena.connector.lambda.data.S3BlockSpiller;
 import com.amazonaws.athena.connector.lambda.data.SpillConfig;
@@ -291,6 +292,9 @@ public abstract class JdbcRecordHandler
         LOGGER.info("writePassThroughQueryUsingResultSchema: executing export query; writing records via spiller to s3://{}/{}.N and schema to {}{}",
                 spillLocation.getBucket(), spillLocation.getKey(), spillLocation.getKey(), SCHEMA_SUFFIX);
 
+        // This separate-schema export targets plain Arrow readers, so disable Presto/Athena timezone packing for
+        // this thread: timestamp-with-tz values are written as plain epoch millis (cleared in finally below).
+        DateTimeFormatterUtil.overrideTimezonePacking(false);
         try (Connection connection = getJdbcConnectionFactory().getConnection(getCredentialProvider(getRequestOverrideConfig(request)))) {
             connection.setAutoCommit(false); // enable server-side streaming for large result sets
             try (PreparedStatement preparedStatement = connection.prepareStatement(passThroughQuery);
@@ -329,6 +333,9 @@ public abstract class JdbcRecordHandler
                     return derivedSchema;
                 }
             }
+        }
+        finally {
+            DateTimeFormatterUtil.clearTimezonePackingOverride();
         }
     }
 
