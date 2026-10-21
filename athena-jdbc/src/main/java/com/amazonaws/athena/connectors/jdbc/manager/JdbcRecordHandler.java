@@ -296,8 +296,8 @@ public abstract class JdbcRecordHandler
             try (PreparedStatement preparedStatement = connection.prepareStatement(passThroughQuery);
                     ResultSet resultSet = preparedStatement.executeQuery()) {
                 // Derive the Arrow schema from the ResultSet itself (faithful column names AND types).
-                Schema derivedSchema = JdbcToArrowUtils.jdbcToArrowSchema(resultSet.getMetaData(),
-                        Calendar.getInstance(TimeZone.getTimeZone("UTC")));
+                // Overridable so connectors can adjust the type mapping (e.g. preserve NUMBER(p,0) precision).
+                Schema derivedSchema = deriveExportSchema(resultSet);
 
                 // Write the schema sidecar BEFORE any record is written, so a reader can discover the schema
                 // as soon as the first data object appears (and even if the row-writing loop later fails).
@@ -330,6 +330,21 @@ public abstract class JdbcRecordHandler
                 }
             }
         }
+    }
+
+    /**
+     * Derives the Arrow schema for the pass-through export from the live {@link ResultSet}. The default uses the
+     * faithful JDBC-to-Arrow mapping ({@link JdbcToArrowUtils}). Connectors may override to adjust the mapping, for
+     * example to preserve the declared precision of integer-like {@code NUMBER(p,0)} columns (which the default maps
+     * to an Arrow integer type, dropping the precision) by mapping them to {@code Decimal(p,0)} instead.
+     *
+     * @param resultSet the live result set whose {@link ResultSetMetaData} drives the schema
+     * @return the Arrow schema the export data will be written with
+     */
+    protected Schema deriveExportSchema(ResultSet resultSet) throws SQLException
+    {
+        return JdbcToArrowUtils.jdbcToArrowSchema(resultSet.getMetaData(),
+                Calendar.getInstance(TimeZone.getTimeZone("UTC")));
     }
 
     /**

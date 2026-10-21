@@ -392,15 +392,24 @@ public class BlockUtils
                     break;
                 case DECIMAL:
                     DecimalVector dVector = ((DecimalVector) vector);
-                    if (value instanceof Double) {
-                        BigDecimal bdVal = new BigDecimal((double) value);
-                        bdVal = bdVal.setScale(dVector.getScale(), RoundingMode.HALF_UP);
-                        dVector.setSafe(pos, bdVal);
+                    BigDecimal decimalValue;
+                    if (value instanceof BigDecimal) {
+                        decimalValue = (BigDecimal) value;
+                    }
+                    else if (value instanceof Double || value instanceof Float) {
+                        decimalValue = BigDecimal.valueOf(((Number) value).doubleValue());
+                    }
+                    else if (value instanceof Number) {
+                        // Integral Numbers (Long, Integer, Short, BigInteger, etc.). Some JDBC drivers return a
+                        // NUMBER column's value as one of these even when the column maps to an Arrow Decimal; a
+                        // plain (BigDecimal) cast on those would throw ClassCastException.
+                        decimalValue = new BigDecimal(value.toString());
                     }
                     else {
-                        BigDecimal scaledValue = ((BigDecimal) value).setScale(dVector.getScale(), RoundingMode.HALF_UP);
-                        ((DecimalVector) vector).setSafe(pos, scaledValue);
+                        decimalValue = (BigDecimal) value;
                     }
+                    decimalValue = decimalValue.setScale(dVector.getScale(), RoundingMode.HALF_UP);
+                    dVector.setSafe(pos, decimalValue);
                     break;
                 case VARCHAR:
                     if (value instanceof Text) {

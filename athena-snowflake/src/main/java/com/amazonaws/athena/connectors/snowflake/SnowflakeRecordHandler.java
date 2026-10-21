@@ -59,7 +59,11 @@ import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.TimeStampMilliTZVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.apache.arrow.vector.types.DateUnit;
+import org.apache.arrow.vector.types.Types;
+import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.arrow.vector.util.VectorAppender;
 import org.apache.commons.lang3.StringUtils;
@@ -76,7 +80,10 @@ import software.amazon.awssdk.utils.Validate;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -366,5 +373,60 @@ public class SnowflakeRecordHandler extends JdbcRecordHandler
         resultVector.setValueCount(rowCount);
 
         return resultVector;
+    }
+
+    /**
+     * Adjusts the default JDBC-to-Arrow export schema for Snowflake so the exported data is portable to plain Arrow
+     * readers (and consistent with the S3-export path):
+     * <ul>
+     *   <li><b>Precision:</b> scale-0 {@code NUMBER(p,0)} columns report a JDBC type of {@code BIGINT}/{@code INTEGER}/...,
+     *       so the default mapping yields an Arrow integer vector that cannot carry the precision {@code p}. We re-map
+     *       those to {@code Decimal(p, 0)} so the exported schema (and sidecar) keeps the source precision.</li>
+     *   <li><b>Timestamps:</b> timestamp-with-timezone columns map to an Arrow {@code TIMESTAMPMILLITZ} vector, which
+     *       {@code BlockUtils} writes using Presto/Athena timezone <em>packing</em> ({@code millis &lt;&lt; 12 | tzKey}).
+     *       A plain Arrow reader cannot decode that. We re-map timestamps to {@code Date(MILLISECOND)} so the value is
+     *       written as plain epoch millis (no packing), matching how Athena treats TSWithTZ as DateMilli(UTC).</li>
+     * </ul>
+     *
+     * <p>Columns the driver already maps to a decimal (scale &gt; 0) are left untouched, and integer precisions
+     * outside the Arrow 128-bit decimal range (1..38) fall back to the default integer mapping.
+     */
+    @Override
+    protected Schema deriveExportSchema(ResultSet resultSet) throws SQLException
+    {
+        Schema baseSchema = super.deriveExportSchema(resultSet);
+        ResultSetMetaData metadata = resultSet.getMetaData();
+        List<Field> fields = new ArrayList<>(baseSchema.getFields().size());
+
+        for (int i = 0; i < baseSchema.getFields().size(); i++) {
+            Field baseField = baseSchema.getFields().get(i);
+            int column = i + 1; // ResultSetMetaData columns are 1-indexed
+            Types.MinorType minorType = Types.getMinorTypeForArrowType(baseField.getType());
+            boolean isArrowInteger = minorType == Types.MinorType.TINYINT || minorType == Types.MinorType.SMALLINT
+                    || minorType == Types.MinorType.INT || minorType == Types.MinorType.BIGINT;
+
+            if (isArrowInteger && metadata.getScale(column) == 0) {
+                int precision = metadata.getPrecision(column);
+                if (precision >= 1 && precision <= 38) {
+                    ArrowType.Decimal decimalType = new ArrowType.Decimal(precision, 0, 128);
+                    fields.add(new Field(baseField.getName(),
+                            new FieldType(baseField.isNullable(), decimalType, null), baseField.getChildren()));
+                    continue;
+                }
+                LOGGER.debug("deriveExportSchema: column {} precision {} outside Arrow decimal range; keeping {}",
+                        baseField.getName(), precision, baseField.getType());
+            }
+
+            if (baseField.getType() instanceof ArrowType.Timestamp) {
+                // Write plain epoch millis (DATEMILLI branch of BlockUtils uses Date#getTime) instead of the
+                // Presto/Athena timezone-packed TIMESTAMPMILLITZ encoding, so plain Arrow readers can decode it.
+                ArrowType.Date dateMilli = new ArrowType.Date(DateUnit.MILLISECOND);
+                fields.add(new Field(baseField.getName(),
+                        new FieldType(baseField.isNullable(), dateMilli, null), baseField.getChildren()));
+                continue;
+            }
+            fields.add(baseField);
+        }
+        return new Schema(fields, baseSchema.getCustomMetadata());
     }
 }
