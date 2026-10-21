@@ -219,7 +219,7 @@ public class SnowflakeAuthUtilsTest
         });
     }
 
-//    @Test
+    @Test
     public void testValidateCredentialsWithOAuthAuthMissingUsername()
     {
         Map<String, String> credentials = new HashMap<>();

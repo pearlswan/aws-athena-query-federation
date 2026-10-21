@@ -67,8 +67,7 @@ public class SnowflakeAuthUtils
             LOGGER.debug("Key-pair authentication detected");
             authType = SnowflakeAuthType.SNOWFLAKE_JWT;
         }
-        else if (StringUtils.isNotBlank(credentials.get(SnowflakeConstants.ACCESS_TOKEN_UPPERCASE))
-                || StringUtils.isNotBlank(credentials.get(SnowflakeConstants.AUTH_CODE))) {
+        else if (StringUtils.isNotBlank(credentials.get(SnowflakeConstants.AUTH_CODE))) {
             LOGGER.debug("OAuth authentication detected");
             authType = SnowflakeAuthType.OAUTH;
         }
@@ -224,7 +223,7 @@ public class SnowflakeAuthUtils
             throw new IllegalArgumentException("Credentials cannot be null or empty");
         }
         // Check for sfUser (or "username" / "USERNAME" field)
-//        getUsername(credentials);
+        getUsername(credentials);
 
         switch (authType) {
             case SNOWFLAKE_JWT:
@@ -234,9 +233,8 @@ public class SnowflakeAuthUtils
                 // Note: Passphrase is optional - only required if the private key is encrypted
                 break;
             case OAUTH:
-                if (StringUtils.isBlank(credentials.get(SnowflakeConstants.AUTH_CODE))
-                        && StringUtils.isBlank(credentials.get(SnowflakeConstants.ACCESS_TOKEN_UPPERCASE))) {
-                    throw new IllegalArgumentException("Auth code or ACCESS_TOKEN is required for OAuth authentication");
+                if (StringUtils.isBlank(credentials.get(SnowflakeConstants.AUTH_CODE))) {
+                    throw new IllegalArgumentException("Auth code is required for OAuth authentication");
                 }
                 break;
             case SNOWFLAKE:

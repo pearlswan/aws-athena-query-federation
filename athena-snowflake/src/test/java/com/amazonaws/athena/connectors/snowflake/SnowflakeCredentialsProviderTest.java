@@ -69,7 +69,7 @@ public class SnowflakeCredentialsProviderTest
         mockSecretsClient = mock(SecretsManagerClient.class);
     }
 
-//    @Test
+    @Test
     public void testGetCredentialWithOAuthFlow() throws Exception
     {
         String secretJson = createOAuthSecretJson();
@@ -96,7 +96,7 @@ public class SnowflakeCredentialsProviderTest
         }
     }
 
-//    @Test
+    @Test
     public void testGetCredentialMapWithOAuthFlow() throws Exception
     {
         String secretJson = createOAuthSecretJson();
@@ -124,7 +124,7 @@ public class SnowflakeCredentialsProviderTest
         }
     }
 
-//    @Test
+    @Test
     public void testGetCredentialMapWithExistingToken()
     {
         String secretJson = createOAuthSecretJsonWithExistingToken();
@@ -146,7 +146,7 @@ public class SnowflakeCredentialsProviderTest
         }
     }
 
-//    @Test
+    @Test
     public void testGetCredentialMapWithExpiredToken() throws Exception
     {
         String secretJson = createOAuthSecretJsonWithExpiredToken();
@@ -356,7 +356,7 @@ public class SnowflakeCredentialsProviderTest
         }
     }
 
-//    @Test
+    @Test
     public void testGetCredentialMapWithPutSecretValueException() throws Exception
     {
         String secretJson = createOAuthSecretJson();

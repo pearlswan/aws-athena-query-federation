@@ -51,7 +51,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static com.amazonaws.athena.connector.credentials.CredentialsConstants.USER;
-import static com.amazonaws.athena.connectors.snowflake.SnowflakeConstants.ACCESS_TOKEN_UPPERCASE;
 import static com.amazonaws.athena.connectors.snowflake.utils.SnowflakeAuthType.OAUTH;
 import static com.amazonaws.athena.connectors.snowflake.utils.SnowflakeAuthUtils.getUsername;
 import static com.amazonaws.athena.connectors.snowflake.utils.SnowflakeAuthUtils.validateCredentials;
@@ -159,11 +158,13 @@ public class SnowflakeCredentialsProvider implements CredentialsProvider
      */
     private Map<String, String> handleOAuthAuthentication(Map<String, String> oauthConfig) throws Exception
     {
-        String accessToken = oauthConfig.containsKey(ACCESS_TOKEN_UPPERCASE)
-                ? oauthConfig.get(ACCESS_TOKEN_UPPERCASE) : fetchAccessTokenFromSecret(oauthConfig);
+        String accessToken = fetchAccessTokenFromSecret(oauthConfig);
         Map<String, String> credentialMap = new HashMap<>();
-        credentialMap.put("token", accessToken);
+        String username = getUsername(oauthConfig);
+        credentialMap.put(SnowflakeConstants.USER, username);
+        credentialMap.put(SnowflakeConstants.PASSWORD, accessToken);
         credentialMap.put(SnowflakeConstants.AUTHENTICATOR, OAUTH.getValue());
+        LOGGER.debug("Using OAuth authentication for user: {}", username);
         return credentialMap;
     }
 
